@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>RunCoach</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Noto+Sans+KR:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  :root { --accent:#FF4D1C; --accent2:#FFD600; }
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; }
+  body { font-family:'Noto Sans KR', sans-serif; color:#fff; position:relative; }
+
+  #bg {
+    position:fixed; inset:0;
+    background:url('background.jpg') center 20%/cover no-repeat;
+    z-index:0; filter:brightness(0.82); transition:filter 0.6s;
+  }
+  #bg.running { filter:brightness(0.65); }
+
+  .top-left {
+    position:fixed; top:18px; left:18px; z-index:10;
+    display:flex; flex-direction:column; align-items:flex-start; gap:5px;
+  }
+  .logo {
+    font-family:'Bebas Neue', sans-serif; font-size:1.5rem;
+    letter-spacing:3px; line-height:1;
+    text-shadow:0 0 14px rgba(255,77,28,0.8), 0 1px 4px rgba(0,0,0,0.6);
+  }
+  .logo span { color:var(--accent); }
+
+  .panel {
+    position:fixed; bottom:10%; left:0; right:0; z-index:10;
+    display:flex; flex-direction:column; align-items:center; gap:6px; padding:0 16px;
+  }
+
+  .card {
+    width:70%; max-width:280px;
+    background:rgba(0,0,0,0.28); backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+    border:1px solid rgba(255,255,255,0.1);
+    border-radius:16px; padding:8px 12px 6px;
+    position:relative; overflow:hidden;
+  }
+  .card::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:1.5px;
+    background:linear-gradient(90deg, transparent, var(--accent), transparent); opacity:0.5;
+  }
+
+  .stopwatch { text-align:center; line-height:1; margin-bottom:2px; }
+  .time-display {
+    font-family:'Bebas Neue', sans-serif; font-size:2.8rem; letter-spacing:4px; transition:color 0.4s;
+  }
+  .time-display.running-color { color:var(--accent); }
+  .time-display.walking-color { color:var(--accent2); }
+  .time-ms { font-family:'Bebas Neue', sans-serif; font-size:0.75rem; color:rgba(255,255,255,0.28); letter-spacing:2px; }
+
+  .phase-row { display:flex; align-items:center; justify-content:center; gap:5px; margin-bottom:1px; }
+  .phase-badge {
+    display:inline-flex; align-items:center; gap:4px;
+    background:rgba(255,255,255,0.07); border:1px solid rgba(255,255,255,0.1);
+    border-radius:12px; padding:2px 8px;
+  }
+  .phase-icon { font-size:0.75rem; }
+  .phase-name { font-size:0.62rem; font-weight:700; letter-spacing:1px; text-transform:uppercase; }
+  .phase-name.run { color:var(--accent); }
+  .phase-name.walk { color:var(--accent2); }
+
+  .btn-skip {
+    background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.2);
+    border-radius:8px; color:rgba(255,255,255,0.7);
+    font-size:0.55rem; font-weight:700; padding:2px 6px; cursor:pointer;
+    font-family:inherit; letter-spacing:0.5px; transition:all 0.2s; white-space:nowrap;
+  }
+  .btn-skip:active { background:rgba(255,255,255,0.2); transform:scale(0.94); }
+
+  .phase-timer {
+    font-family:'Bebas Neue', sans-serif; font-size:1.5rem; letter-spacing:2px;
+    text-align:center; margin-bottom:4px;
+  }
+
+  .progress-meta { display:flex; justify-content:space-between; font-size:0.55rem; color:rgba(255,255,255,0.28); margin-bottom:2px; }
+  .progress-bar { height:2px; background:rgba(255,255,255,0.1); border-radius:2px; overflow:hidden; margin-bottom:4px; }
+  .progress-fill { height:100%; background:linear-gradient(90deg, var(--accent), var(--accent2)); width:0%; transition:width 1s linear; }
+
+  .timeline-wrap { position:relative; width:100%; margin-bottom:8px; }
+  .timeline { display:flex; gap:1px; height:10px; border-radius:5px; overflow:hidden; }
+  .seg { border-radius:0; opacity:0.25; transition:opacity 0.3s; }
+  .seg.run-seg { background:var(--accent); }
+  .seg.walk-seg { background:var(--accent2); }
+  .seg.rest-seg { background:#7EFFD4; }
+  .seg.done { opacity:0.65; }
+  .seg.current { opacity:1; }
+  .timeline-labels { position:relative; height:13px; margin-top:2px; }
+  .tl-label {
+    font-size:0.5rem; color:rgba(255,255,255,0.32);
+    font-family:'Bebas Neue', sans-serif; letter-spacing:0.5px;
+    position:absolute; transform:translateX(-50%); white-space:nowrap;
+  }
+
+  .level-row { width:70%; max-width:280px; display:flex; align-items:center; gap:5px; }
+  .level-label-sm {
+    font-size:0.55rem; letter-spacing:1.5px; color:rgba(255,255,255,0.38);
+    text-transform:uppercase; white-space:nowrap; text-shadow:0 1px 3px rgba(0,0,0,0.6);
+  }
+  .levels { display:flex; gap:4px; flex:1; }
+
+  .level-btn {
+    flex:1; height:48px; border-radius:8px;
+    border:1.5px solid rgba(255,255,255,0.15);
+    background:rgba(0,0,0,0.3); cursor:pointer; transition:all 0.2s;
+    backdrop-filter:blur(6px); position:relative;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:4px 2px 2px; overflow:hidden;
+  }
+  .level-btn .lv-num {
+    position:absolute; top:3px; left:5px;
+    font-family:'Bebas Neue', sans-serif; font-size:0.72rem; line-height:1;
+    color:rgba(255,255,255,0.45);
+  }
+  .level-btn .lv-info { display:flex; flex-direction:column; align-items:center; margin-top:6px; }
+  .level-btn .lv-run { font-size:0.46rem; font-weight:700; color:var(--accent); opacity:0.65; line-height:1.4; }
+  .level-btn .lv-walk { font-size:0.46rem; font-weight:700; color:var(--accent2); opacity:0.65; line-height:1.4; }
+  .level-btn.active {
+    background:rgba(255,77,28,0.22); border-color:var(--accent);
+    box-shadow:0 2px 10px rgba(255,77,28,0.4); transform:scale(1.06);
+  }
+  .level-btn.active .lv-num { color:var(--accent); }
+  .level-btn.active .lv-run, .level-btn.active .lv-walk { opacity:1; }
+
+  .controls { width:70%; max-width:280px; display:flex; gap:6px; }
+  .btn-start {
+    flex:1; height:38px; border-radius:11px; border:none;
+    background:var(--accent); color:#fff;
+    font-family:'Bebas Neue', sans-serif; font-size:1.05rem; letter-spacing:3px;
+    cursor:pointer; box-shadow:0 3px 14px rgba(255,77,28,0.45); transition:all 0.2s;
+    position:relative; overflow:hidden;
+  }
+  .btn-start::after { content:''; position:absolute; inset:0; background:rgba(255,255,255,0.15); opacity:0; transition:opacity 0.15s; }
+  .btn-start:active::after { opacity:1; }
+  .btn-start.paused { background:#2a9d8f; box-shadow:0 3px 14px rgba(42,157,143,0.45); }
+  .btn-reset {
+    width:38px; height:38px; border-radius:11px;
+    border:1.5px solid rgba(255,255,255,0.18); background:rgba(0,0,0,0.3);
+    color:rgba(255,255,255,0.7); font-size:1rem; cursor:pointer;
+    backdrop-filter:blur(8px); transition:all 0.2s;
+  }
+  .btn-reset:active { transform:scale(0.9); }
+
+  .completed-overlay {
+    position:fixed; inset:0; z-index:100; background:rgba(0,0,0,0.78);
+    display:flex; align-items:center; justify-content:center;
+    opacity:0; pointer-events:none; transition:opacity 0.4s; backdrop-filter:blur(8px);
+  }
+  .completed-overlay.show { opacity:1; pointer-events:all; }
+  .completed-box { text-align:center; padding:28px; }
+  .completed-emoji { font-size:3rem; margin-bottom:10px; }
+  .completed-title { font-family:'Bebas Neue', sans-serif; font-size:2.6rem; letter-spacing:4px; color:var(--accent2); margin-bottom:5px; }
+  .completed-sub { color:rgba(255,255,255,0.5); font-size:0.85rem; margin-bottom:24px; }
+  .btn-again {
+    background:var(--accent); border:none; border-radius:12px; color:#fff;
+    font-family:'Bebas Neue', sans-serif; font-size:1.1rem; letter-spacing:2px; padding:12px 28px; cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="bg"></div>
+
+<div class="top-left">
+  <div class="logo">Run<span>Coach</span></div>
+</div>
+
+<div class="panel">
+  <div class="card">
+    <div class="stopwatch">
+      <div class="time-display" id="stopwatch">00:00</div>
+      <div class="time-ms" id="stopwatch-ms">.00</div>
+    </div>
+    <div class="phase-row">
+      <div class="phase-badge">
+        <span class="phase-icon" id="phase-icon">🚶</span>
+        <span class="phase-name" id="phase-name">READY</span>
+      </div>
+      <button class="btn-skip" onclick="skipPhase()">SKIP ▶</button>
+    </div>
+    <div class="phase-timer" id="phase-timer">--:--</div>
+    <div class="progress-meta">
+      <span id="prog-label">Progress</span>
+      <span id="prog-pct">0%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+    <div class="timeline-wrap">
+      <div class="timeline" id="timeline"></div>
+      <div class="timeline-labels" id="timeline-labels"></div>
+    </div>
+  </div>
+
+  <div class="level-row">
+    <span class="level-label-sm" id="lbl-level">Level</span>
+    <div class="levels" id="levels-container"></div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-start" id="btn-start" onclick="toggleStart()">
+      <span id="btn-label">START</span>
+    </button>
+    <button class="btn-reset" onclick="resetTimer()">↺</button>
+  </div>
+</div>
+
+<div class="completed-overlay" id="completed-overlay">
+  <div class="completed-box">
+    <div class="completed-emoji">🏅</div>
+    <div class="completed-title" id="comp-title">완료!</div>
+    <div class="completed-sub" id="comp-sub">오늘의 운동을 완료했습니다!</div>
+    <button class="btn-again" onclick="resetTimer()" id="btn-again">다시하기</button>
+  </div>
+</div>
+
+<script>
+// ─── DATA ──────────────────────────────────────────────────
+const LEVELS = [
+  { warmup:300, cooldown:300, run:60,  walk:60,  target:30*60 },
+  { warmup:300, cooldown:300, run:80,  walk:100, target:30*60 },
+  { warmup:300, cooldown:300, run:90,  walk:110, target:30*60 },
+  { warmup:240, cooldown:240, run:120, walk:120, target:40*60 },
+  { warmup:180, cooldown:180, run:180, walk:60,  target:40*60 },
+];
+
+const T = {
+  en:{ levelLabel:'Level', start:'START', pause:'PAUSE', resume:'RESUME', progress:'Progress',
+       run:'RUN', walk:'WALK', ready:'READY',
+       compTitle:'DONE! 🎉', compSub:'Workout complete!', again:'Again' }};
+
+const VOICE_TEXT = {
+  en:{ warmup:"Let's warm up!", run:"Let's run!", walk:'Start walking!', cooldown:'Now cooling down!' }
+};
+
+// ─── STATE ─────────────────────────────────────────────────
+let lang = 'en';
+let selectedLevel = 0;
+let segments = [];
+let elapsed = 0;
+let isRunning = false;
+let animFrame = null;
+let lastTick = null;
+let lastAnnouncedKey = null;
+let lastAnnouncedSegIdx = -1;
+
+// ─── AUDIO ─────────────────────────────────────────────────
+const TRACKS = {
+  warmup:'music.mp3', run:'music.mp3',
+  walk:'music.mp3', cooldown:'music.mp3'
+};
+const FADE = 2.0;
+let audioCtx = null;
+let audioBuffers = {};
+let activeSources = {};
+let audioReady = false;
+let currentTrackKey = null;
+
+async function initAudio() {
+  if (audioCtx) return;
+  try {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    await Promise.all(Object.entries(TRACKS).map(async ([key, url]) => {
+      try {
+        const res = await fetch(url);
+        const buf = await res.arrayBuffer();
+        audioBuffers[key] = await audioCtx.decodeAudioData(buf);
+      } catch(e) { console.warn('Track load failed:', url); }
+    }));
+    audioReady = true;
+  } catch(e) { console.warn('Audio init failed:', e); }
+}
+
+function playTrack(key) {
+  if (!audioReady || !audioCtx || !audioBuffers[key]) return;
+  if (currentTrackKey === key) return;
+  const now = audioCtx.currentTime;
+  Object.entries(activeSources).forEach(([k, {source, gainNode}]) => {
+    gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+    gainNode.gain.linearRampToValueAtTime(0, now + FADE);
+    source.stop(now + FADE);
+  });
+  activeSources = {};
+  const source = audioCtx.createBufferSource();
+  source.buffer = audioBuffers[key];
+  source.loop = true;
+  const gainNode = audioCtx.createGain();
+  gainNode.gain.setValueAtTime(0, now);
+  gainNode.gain.linearRampToValueAtTime(1.0, now + FADE);
+  source.connect(gainNode);
+  gainNode.connect(audioCtx.destination);
+  source.start(now);
+  activeSources[key] = { source, gainNode };
+  currentTrackKey = key;
+}
+
+function stopAllAudio() {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  Object.entries(activeSources).forEach(([k, {source, gainNode}]) => {
+    gainNode.gain.setValueAtTime(gainNode.gain.value, now);
+    gainNode.gain.linearRampToValueAtTime(0, now + 0.5);
+    source.stop(now + 0.5);
+  });
+  activeSources = {};
+  currentTrackKey = null;
+}
+
+function announce(key) {
+  if (!window.speechSynthesis) return;
+  const text = VOICE_TEXT.en[key];
+  if (!text) return;
+  window.speechSynthesis.cancel();
+
+  const trySpeak = () => {
+    const voices = window.speechSynthesis.getVoices();
+    const femaleNames = ['samantha','karen','fiona','victoria','moira','tessa','veena','allison','susan','zoe','kate'];
+    let voice = voices.find(v =>
+      v.lang.toLowerCase().startsWith('en') &&
+      femaleNames.some(k => v.name.toLowerCase().includes(k))
+    );
+    if (!voice) voice = voices.find(v => v.lang.toLowerCase().startsWith('en'));
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'en-US';
+    utter.rate = 1.0;
+    utter.pitch = 1.4;
+    utter.volume = 1.0;
+    if (voice) utter.voice = voice;
+    window.speechSynthesis.speak(utter);
+  };
+
+  if (window.speechSynthesis.getVoices().length > 0) {
+    trySpeak();
+  } else {
+    window.speechSynthesis.onvoiceschanged = () => { trySpeak(); window.speechSynthesis.onvoiceschanged = null; };
+  }
+}
+
+function getTrackKey(seg) {
+  if (seg.en === 'Warm-up') return 'warmup';
+  if (seg.en === 'Cool-down') return 'cooldown';
+  if (seg.type === 'run') return 'run';
+  return 'walk';
+}
+
+function handleAudioForPhase(seg, segIdx) {
+  const key = getTrackKey(seg);
+  if (audioReady) playTrack(key);
+  // Announce on every segment index change (not just key change)
+  // This ensures repeated walk→run→walk cycles all announce
+  if (segIdx !== lastAnnouncedSegIdx) {
+    announce(key);
+    lastAnnouncedSegIdx = segIdx;
+    lastAnnouncedKey = key;
+  }
+}
+
+// ─── LANG ──────────────────────────────────────────────────
+function t(k) { return T.en[k] || k; }
+
+// ─── SEGMENTS ──────────────────────────────────────────────
+function fmtTime(sec) {
+  const m = sec / 60;
+  return Number.isInteger(m) ? m+'m' : m.toFixed(1)+'m';
+}
+
+function buildSegments(lvl) {
+  const L = LEVELS[lvl];
+  const segs = [{ type:'walk', ko:'준비 걷기', en:'Warm-up', dur:L.warmup }];
+  const loops = Math.round((L.target - L.warmup - L.cooldown) / (L.run + L.walk));
+  for (let i = 0; i < loops; i++) {
+    segs.push({ type:'run',  ko:'달리기', en:'RUN',  dur:L.run });
+    segs.push({ type:'walk', ko:'걷기',   en:'WALK', dur:L.walk });
+  }
+  segs.push({ type:'walk', ko:'마무리 걷기', en:'Cool-down', dur:L.cooldown });
+  return segs;
+}
+
+function totalDuration() { return segments.reduce((a,s) => a+s.dur, 0); }
+
+function getPhaseAt(sec) {
+  let acc = 0;
+  for (let i = 0; i < segments.length; i++) {
+    if (sec < acc + segments[i].dur) return { idx:i, seg:segments[i], within:sec-acc, segStart:acc };
+    acc += segments[i].dur;
+  }
+  return null;
+}
+
+// ─── LEVEL BUTTONS ─────────────────────────────────────────
+function renderLevelButtons() {
+  const container = document.getElementById('levels-container');
+  container.innerHTML = '';
+  LEVELS.forEach((L, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'level-btn' + (i === selectedLevel ? ' active' : '');
+    btn.onclick = () => selectLevel(i);
+    const runLabel = `RUN ${fmtTime(L.run)}`;
+    const walkLabel = `WALK ${fmtTime(L.walk)}`;
+    btn.innerHTML = `<span class="lv-num">${i+1}</span>
+      <div class="lv-info">
+        <span class="lv-run">${runLabel}</span>
+        <span class="lv-walk">${walkLabel}</span>
+      </div>`;
+    container.appendChild(btn);
+  });
+}
+
+function selectLevel(idx) {
+  if (isRunning || elapsed > 0) resetTimer();
+  selectedLevel = idx;
+  segments = buildSegments(idx);
+  renderLevelButtons();
+  renderTimeline();
+  updateDisplay();
+}
+
+// ─── TIMER ─────────────────────────────────────────────────
+async function toggleStart() {
+  if (elapsed >= totalDuration()) { resetTimer(); return; }
+
+  // Init audio on first tap
+  if (!audioCtx) await initAudio();
+  if (audioCtx && audioCtx.state === 'suspended') await audioCtx.resume();
+
+  isRunning = !isRunning;
+  const btn = document.getElementById('btn-start');
+
+  if (isRunning) {
+    lastTick = performance.now();
+    animFrame = requestAnimationFrame(tick);
+    btn.classList.remove('paused');
+    document.getElementById('btn-label').textContent = t('pause');
+    // Start music for current phase immediately
+    const phase = getPhaseAt(Math.min(elapsed, totalDuration()-0.01));
+    if (phase) handleAudioForPhase(phase.seg, phase.idx);
+  } else {
+    cancelAnimationFrame(animFrame);
+    btn.classList.add('paused');
+    document.getElementById('btn-label').textContent = t('resume');
+    document.getElementById('bg').classList.remove('running');
+  }
+}
+
+function tick(now) {
+  elapsed += (now - lastTick) / 1000;
+  lastTick = now;
+  if (elapsed >= totalDuration()) {
+    elapsed = totalDuration();
+    isRunning = false;
+    updateDisplay();
+    stopAllAudio();
+    showCompleted();
+    return;
+  }
+  updateDisplay();
+  animFrame = requestAnimationFrame(tick);
+}
+
+function resetTimer() {
+  cancelAnimationFrame(animFrame);
+  isRunning = false; elapsed = 0; lastTick = null; lastAnnouncedKey = null; lastAnnouncedSegIdx = -1;
+  stopAllAudio();
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
+  document.getElementById('btn-start').classList.remove('paused');
+  document.getElementById('btn-label').textContent = t('start');
+  document.getElementById('bg').classList.remove('running');
+  document.getElementById('completed-overlay').classList.remove('show');
+  updateDisplay();
+}
+
+function skipPhase() {
+  const phase = getPhaseAt(Math.min(elapsed, totalDuration()-0.01));
+  if (!phase) return;
+  const nextStart = phase.segStart + phase.seg.dur;
+  if (nextStart >= totalDuration()) {
+    elapsed = totalDuration(); isRunning = false;
+    cancelAnimationFrame(animFrame);
+    updateDisplay(); stopAllAudio(); showCompleted(); return;
+  }
+  elapsed = nextStart;
+  lastAnnouncedKey = null; // force re-announce
+  updateDisplay();
+  if (isRunning) {
+    const newPhase = getPhaseAt(elapsed);
+    if (newPhase) handleAudioForPhase(newPhase.seg, newPhase.idx);
+  }
+}
+
+// ─── DISPLAY ───────────────────────────────────────────────
+function updateDisplay() {
+  const m = Math.floor(elapsed/60), s = Math.floor(elapsed%60), ms = Math.floor((elapsed%1)*100);
+  document.getElementById('stopwatch').textContent = String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  document.getElementById('stopwatch-ms').textContent = '.'+String(ms).padStart(2,'0');
+  const pct = Math.min(100, (elapsed/totalDuration())*100);
+  document.getElementById('progress-fill').style.width = pct.toFixed(1)+'%';
+  document.getElementById('prog-pct').textContent = Math.floor(pct)+'%';
+  updatePhaseDisplay();
+  updateTimeline();
+}
+
+function updatePhaseDisplay() {
+  if (!segments.length) return;
+  const phase = getPhaseAt(Math.min(elapsed, totalDuration()-0.01));
+  if (!phase) return;
+  const seg = phase.seg;
+  const rem = seg.dur - phase.within;
+  const remM = Math.floor(rem/60), remS = Math.floor(rem%60);
+  const sw = document.getElementById('stopwatch');
+  const bg = document.getElementById('bg');
+
+  document.getElementById('phase-icon').textContent = elapsed===0 ? '🚶' : (seg.type==='run' ? '🏃' : '🚶');
+  document.getElementById('phase-name').textContent = elapsed===0 ? t('ready') : seg.en;
+  document.getElementById('phase-name').className = 'phase-name '+(seg.type==='run'?'run':'walk');
+  document.getElementById('phase-timer').textContent = elapsed===0 ? '--:--' :
+    String(remM).padStart(2,'0')+':'+String(remS).padStart(2,'0');
+
+  if (isRunning && seg.type==='run') {
+    sw.className = 'time-display running-color'; bg.classList.add('running');
+    handleAudioForPhase(seg, phase.idx);
+  } else if (isRunning) {
+    sw.className = 'time-display walking-color'; bg.classList.remove('running');
+    handleAudioForPhase(seg, phase.idx);
+  } else {
+    sw.className = 'time-display'; bg.classList.remove('running');
+  }
+}
+
+function renderTimeline() {
+  const tl = document.getElementById('timeline');
+  tl.innerHTML = '';
+  const total = totalDuration();
+  segments.forEach(s => {
+    const el = document.createElement('div');
+    const isEdge = s.ko==='준비 걷기' || s.ko==='마무리 걷기';
+    el.className = 'seg '+(s.type==='run'?'run-seg':isEdge?'rest-seg':'walk-seg');
+    el.style.flex = s.dur/total*segments.length;
+    tl.appendChild(el);
+  });
+  const labels = document.getElementById('timeline-labels');
+  labels.innerHTML = '';
+  const tickSec = total <= 30*60 ? 120 : 300;
+  for (let tt = tickSec; tt < total; tt += tickSec) {
+    const lbl = document.createElement('span');
+    lbl.className = 'tl-label';
+    lbl.style.left = (tt/total*100)+'%';
+    const mins = tt/60;
+    lbl.textContent = Number.isInteger(mins) ? mins+'m' : mins.toFixed(1)+'m';
+    labels.appendChild(lbl);
+  }
+}
+
+function updateTimeline() {
+  const items = document.getElementById('timeline').children;
+  let acc = 0;
+  for (let i = 0; i < segments.length; i++) {
+    const el = items[i]; if (!el) continue;
+    if (elapsed >= acc+segments[i].dur) { el.classList.add('done'); el.classList.remove('current'); }
+    else if (elapsed >= acc) { el.classList.add('current'); el.classList.remove('done'); }
+    else { el.classList.remove('current','done'); }
+    acc += segments[i].dur;
+  }
+}
+
+function showCompleted() {
+  document.getElementById('completed-overlay').classList.add('show');
+  document.getElementById('bg').classList.remove('running');
+  document.getElementById('btn-label').textContent = t('start');
+}
+
+// ─── INIT ──────────────────────────────────────────────────
+segments = buildSegments(0);
+renderLevelButtons();
+renderTimeline();
+updateDisplay();
+</script>
+</body>
+</html>
